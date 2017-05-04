@@ -1,0 +1,102 @@
+#setwd("./R_Coursera")
+options(digits = 4)
+
+## 1. Write a function named 'pollutantmean' that calculates the mean of a pollutant 
+##    (sulfate or nitrate) across a specified list of monitors. The function 'pollutantmean' 
+##    takes three arguments: 'directory', 'pollutant', and 'id'. Given a vector monitor ID numbers
+##    , 'pollutantmean' reads that monitors' particulate matter data from the directory specified
+##    in the 'directory' argument and returns the mean of the pollutant across all of the monitors,
+##    ignoring any missing values coded as NA. 
+
+pollutantmean <- function(directory, pollutant, id=1:332) {
+  
+    # create a character vector of the names of the files from the directory
+    files_list <- list.files(directory, full.names=TRUE)
+    
+    # read in the elements into a second set of files named tmp
+    df <- lapply(files_list, read.csv)
+    
+    # create a data frame
+    df_file <- do.call(rbind, df)
+    
+    # include the monitor id that is entered by user
+    dat <- df_file[which(df_file[, "ID"] %in% id),]
+
+    # calculate mean of the pollutant
+    mean(dat[[pollutant]], na.rm=TRUE)
+  }
+  
+## 2. Write a function that reads a directory full of files and reports the number of completely 
+##    observed cases in each data file. The function should return a data frame where the first
+##    column is the name of the file and the second column is the number of complete cases.
+
+complete <- function(directory, id=1:332) {
+  nobs = numeric()
+  for (i in id) {
+    files_list <- list.files(directory, full.names=TRUE)
+    df <- lapply(files_list[i], read.csv)
+    dat <- do.call(rbind, df)
+    nobs = c(nobs, sum(complete.cases(dat)))
+  }
+  return(data.frame(id, nobs))
+}  
+  
+#   # ALTERNATIVE  
+#   # create a character vector of the names of the files from the directory
+#   files_list <- list.files(directory, full.names=TRUE)
+#     
+#   # read in the elements into a second set of files named tmp
+#   df <- lapply(files_list, read.csv)
+#   
+#   # create a data frame
+#   dat <- do.call(rbind, df)
+#   
+#   # find complete cases
+#   dat_subset <- dat[complete.cases(dat), ]
+#   
+#   # initialize the vector
+#   ID <-  dat_subset[c(4)]
+#   
+#   # use table frequency
+#   newtable <- as.data.frame(table(ID[which(ID[, "ID"] %in% id), ]))
+#   
+#   # update the column names
+#   names(newtable) <- c("id", "nobs")
+#   
+#   # return the columns for id and nobs
+#   newtable
+# }
+
+##. 3. Write a function that takes a directory of data files and a threshold 
+##     for complete cases and calculates the correlation between sulfate and 
+##     nitrate for monitor locations where the number of completely observed 
+##     cases (on all variables) is greater than the threshold. The function 
+##     should return a vector of correlations for the monitors that meet the
+##     threshold requirement. If no monitors meet the threshold requirement,
+##     then the function should return a numeric vector of length 0.
+
+corr <- function(directory, threshold=0) {
+  nobs = numeric()
+  #dfnobs = data.frame()
+  for (i in 1:332) {
+    files_list <- list.files(directory, full.names=TRUE)
+    df <- lapply(files_list[i], read.csv)
+    dat <- do.call(rbind, df)
+    nobs = c(nobs, sum(complete.cases(dat)))
+
+  }
+  dat_subset = dat[complete.cases(dat), ]
+  dfnobs <- data.frame(id, nobs)
+
+  ids = dfnobs[dfnobs["nobs"] > threshold, ]$ID
+  correl = c()
+  
+  for (i in ids) {
+    files_list <- list.files(directory, full.names=TRUE)
+    df <- lapply(files_list[i], read.csv)
+    dat <- do.call(rbind, df)
+     correl = append(correl, cor(dat$sulfate, dat$nitrate, use="complete.obs"))
+  }
+
+  return(correl)
+}
