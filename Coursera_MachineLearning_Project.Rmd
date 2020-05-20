@@ -1,0 +1,132 @@
+---
+title: "R Coursera 8.0 Machine Learning Project"
+author: "Cora Hermoso"
+date: "May 18, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Background
+
+Purpose of this project is to predict the activities of 6 people using accelerometers recording devices with the belt, forearm, arm and dumbell.
+
+The plan is to divide data into training/test/validation. Treat validation as test data, train competing models on the train data and pick the best one on validation. To assess performance, apply to test set. Possibly, could re-plit and reperform to get a better estimate of what the out-of-average sample error rate will be.
+
+Training and test data were provided by  http://groupware.les.inf.puc-rio.br/har.
+
+# Data Sources
+
+Training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+Test data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r dataset, message=FALSE, results='hide', echo=FALSE, include=FALSE}
+library(plyr)
+library(ggplot2)
+library(caret)
+library(rpart)
+
+# read in the data from the provided downloaded files
+# cleaned up the file by assigning NA to null or indivisible fields
+pml_train <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+pml_test <- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+```
+
+# Exploratory Analysis
+
+Data was examined for the type of variables and size. From the analysis, the irrelevant variables were removed to be able to compute a manageable file and anticipate the results.
+
+```{r dataclean, message=FALSE, results='hide', echo=FALSE, include=FALSE}
+dim(pml_train)  
+dim(pml_test)   
+
+# removed irrelevant columns that will not be included in the model
+pml_train <- pml_train[, -c(1:7)] 
+pml_test <- pml_test[, -c(1:7)] 
+
+# assigned zero to NA columns and removed those columns with at least 1 NA
+traindata <- pml_train[, colSums(is.na(pml_train)) == 0] 
+testdata <- pml_test[, colSums(is.na(pml_test)) == 0] 
+ 
+# removed non-numeric variables; saved the classe variable and added it back as a parameter
+
+classe <- traindata$classe 
+train_clean <- traindata[, sapply(traindata, is.numeric)] 
+train_clean$classe <- factor(classe) 
+rm(classe) 
+
+# removed non-numeric variables from test and renamed to "testing" dataset
+# observed test data has no "classe" variable but last column is "problem_id""
+testing <- testdata[, sapply(testdata, is.numeric)] 
+dim(testing)  
+```
+
+# Preparing the DataSet
+
+To be reproducible, set.seed() was used. Then the training data was split into 2 sets; composing of training and validation datasets. The training dataset was split into 2: 70% training and 30% validation.
+
+```{r prepdata, message=FALSE, results='hide', echo=FALSE, include=FALSE}
+
+set.seed(1234)
+inTrain <- createDataPartition(y=train_clean$classe, p=0.7, list=FALSE) 
+training <- train_clean[inTrain,]
+validation <- train_clean[-inTrain,]
+rm(train_clean, inTrain)
+
+dim(training)   
+dim(validation) 
+
+```
+
+# Modeling and Evaluation of Validation Data
+
+Random forest method is used to model the training data. The technique is to aggregate the results of multiple predictors or trees, such that the better prediction can be resulted over the best individual predictor. 
+Syntax: RandomForest(formula, ntree=n, mtry=FALSE, maxnodes = NULL)
+
+The caret library is used to evaluate the model with function train().
+Syntax: train(formula, df, method = "rf", metric= "Accuracy", trControl = trainControl(), tuneGrid = NULL)
+
+K-fold cross validation is controlled by the trainControl() function. It is used to randomly split number datasets of almost the same size and evaluated which will then be used on the remaining test set.
+Syntax: trainControl(method = "cv", number = n, search ="grid").
+
+An optimal model is obtained with an accuracy score is 99.3% with low error rate 1.5% and mtry of 27. As such, it is not necessary to tune the model. Using function varImp, the roll-belt showed the most prominent device across the 5 classe.
+
+```{r datamodel1, message=FALSE}
+
+# initialize seed for the validation dataset
+set.seed(33333)
+
+# define the cross-validation parameters, with 10 folders for cross-validation
+controlRf <- trainControl(method = "cv", 10, search= "grid")
+
+# build the model and evaluate using the train() function
+model_rf <- train(classe ~., data = training, method="rf", metric = "Accuracy", trControl=controlRf, importance=TRUE, ntree=20)
+# print(model_rf)    
+print(model_rf$finalModel)
+
+# evaluate the model using validation dataset
+set.seed(33333)
+predict_rf <- predict(model_rf, validation)
+
+# view the accuracy score
+# confusionMatrix(predict_rf, validation$classe)
+confusionMatrix(predict_rf, validation$classe)$overall[1]
+
+# Calculating the error
+Error <- 1 - as.numeric(confusionMatrix(validation$classe, predict_rf)$overall[1])
+# print(Error)
+
+# Visualize the importance
+varImp(model_rf)
+
+```
+
+# Predicting 20 Test Cases
+
+```{r testcases}
+pred_testcases <- predict(model_rf, testing[, -length(names(testing))])
+pred_testcases
+```
